@@ -214,11 +214,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setProfile(null);
           }
         });
-      } else {
-        const storedUser = localStorage.getItem('gymeo_session_user');
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-        }
       }
     };
 
@@ -242,52 +237,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Auth Operations
   const login = async (email: string, pass: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
-      const { data, error } = await supabase!.auth.signInWithPassword({ email, password: pass });
-      if (error) throw error;
-      if (data.user) {
-        setUser({ id: data.user.id, email: data.user.email! });
-        showToast('Signed in successfully!', 'success');
-        return true;
-      }
-      return false;
-    } else {
-      const localProfile = db.getProfile();
-      const mockSession = { id: localProfile.id, email };
-      localStorage.setItem('gymeo_session_user', JSON.stringify(mockSession));
-      setUser(mockSession);
-      showToast('Signed in successfully! (Local Session)', 'success');
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase client is not configured. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your environment variables.');
+    }
+    const { data, error } = await supabase!.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    if (data.user) {
+      setUser({ id: data.user.id, email: data.user.email! });
+      showToast('Signed in successfully!', 'success');
       return true;
     }
+    return false;
   };
 
   const register = async (email: string, pass: string, username: string, name: string): Promise<boolean> => {
-    if (isSupabaseConfigured()) {
-      const { data, error } = await supabase!.auth.signUp({
-        email,
-        password: pass,
-        options: {
-          data: {
-            username,
-            display_name: name
-          }
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase client is not configured. Please add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your environment variables.');
+    }
+    const { data, error } = await supabase!.auth.signUp({
+      email,
+      password: pass,
+      options: {
+        data: {
+          username,
+          display_name: name
         }
-      });
-      if (error) throw error;
-      if (data.user) {
-        setUser({ id: data.user.id, email: data.user.email! });
-        showToast('Account registered successfully!', 'success');
-        return true;
       }
-      return false;
-    } else {
-      const newProfile = db.registerUser(username, name);
-      const mockSession = { id: newProfile.id, email };
-      localStorage.setItem('gymeo_session_user', JSON.stringify(mockSession));
-      setUser(mockSession);
-      showToast('Account created! (Local Session)', 'success');
+    });
+    if (error) throw error;
+    if (data.user) {
+      setUser({ id: data.user.id, email: data.user.email! });
+      showToast('Account registered successfully!', 'success');
       return true;
     }
+    return false;
   };
 
   const logout = async () => {

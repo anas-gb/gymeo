@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Globe
 } from 'lucide-react';
+import { supabase } from '../../services/supabaseClient';
 
 interface AuthViewProps {
   onLogin: (email: string, pass: string) => Promise<boolean>;
@@ -58,12 +59,26 @@ export default function AuthView({ onLogin, onRegister }: AuthViewProps) {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Mock login or redirect to Supabase OAuth
-    setErrorMsg('Google OAuth login initiated. Running locally, auth simulated.');
-    setTimeout(() => {
-      onLogin('google_user@gmail.com', 'google_mock_pass');
-    }, 1000);
+  const handleGoogleLogin = async () => {
+    if (!supabase) {
+      setErrorMsg('Supabase URL/Key environment variables are missing. Configure Supabase in Vercel to activate Google OAuth.');
+      return;
+    }
+    try {
+      setLoading(true);
+      setErrorMsg('');
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Google OAuth failed to initialize.');
+      setLoading(false);
+    }
   };
 
   return (
