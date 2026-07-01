@@ -4,28 +4,24 @@ import React from 'react';
 import { AppProvider, useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Flame, 
   Dumbbell, 
-  CheckSquare, 
-  Timer, 
+  Apple, 
   Users, 
   BarChart3, 
-  Settings, 
+  User, 
+  LogOut, 
   Zap, 
-  Activity,
-  ChevronRight,
-  TrendingUp,
-  LogOut
+  CheckSquare, 
+  ChevronRight, 
+  Settings
 } from 'lucide-react';
 
-// Import Views
-import DashboardView from '../components/views/DashboardView';
-import WorkoutTrackerView from '../components/views/WorkoutTrackerView';
-import HabitTrackerView from '../components/views/HabitTrackerView';
-import FocusModeView from '../components/views/FocusModeView';
+// Import 5-Tab Views
+import GymView from '../components/views/GymView';
+import FoodView from '../components/views/FoodView';
 import SocialView from '../components/views/SocialView';
-import ProgressView from '../components/views/ProgressView';
-import SettingsView from '../components/views/SettingsView';
+import StatsView from '../components/views/StatsView';
+import ProfileView from '../components/views/ProfileView';
 import AuthView from '../components/views/AuthView';
 import OnboardingView from '../components/views/OnboardingView';
 
@@ -35,14 +31,14 @@ function AppLayout() {
     setActiveTab, 
     profile, 
     toast,
-    timerActive,
-    timerTimeLeft,
     isAuthenticated,
     isOnboarded,
     login,
     register,
     logout,
-    completeOnboarding
+    completeOnboarding,
+    timerActive,
+    timerTimeLeft
   } = useApp();
 
   const formatTime = (seconds: number) => {
@@ -51,15 +47,13 @@ function AppLayout() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Nav menu configuration
+  // Nav menu configuration (Material 3 Tabs)
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Activity },
-    { id: 'workouts', label: 'Workouts', icon: Dumbbell },
-    { id: 'habits', label: 'Habits', icon: CheckSquare },
-    { id: 'focus', label: 'Focus Mode', icon: Timer },
+    { id: 'gym', label: 'Gym', icon: Dumbbell },
+    { id: 'food', label: 'Food', icon: Apple },
     { id: 'social', label: 'Social', icon: Users },
-    { id: 'progress', label: 'Progress', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'stats', label: 'Stats', icon: BarChart3 },
+    { id: 'profile', label: 'Profile', icon: User },
   ] as const;
 
   // --- SECURITY GATE 1: Authenticated check ---
@@ -84,26 +78,24 @@ function AppLayout() {
 
   const renderActiveView = () => {
     switch (activeTab) {
-      case 'dashboard': return <DashboardView />;
-      case 'workouts': return <WorkoutTrackerView />;
-      case 'habits': return <HabitTrackerView />;
-      case 'focus': return <FocusModeView />;
+      case 'gym': return <GymView />;
+      case 'food': return <FoodView />;
       case 'social': return <SocialView />;
-      case 'progress': return <ProgressView />;
-      case 'settings': return <SettingsView />;
-      default: return <DashboardView />;
+      case 'stats': return <StatsView />;
+      case 'profile': return <ProfileView />;
+      default: return <GymView />;
     }
   };
 
   return (
     <div className="flex-1 flex flex-col md:flex-row min-h-screen bg-slate-950 text-slate-100 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
       
-      {/* 1. DESKTOP SIDEBAR */}
+      {/* 1. DESKTOP SIDEBAR - Material 3 Inspired */}
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-850 p-6 sticky top-0 h-screen justify-between z-20">
         <div className="space-y-8">
           {/* Logo */}
           <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+            <div className="flex items-center gap-2 cursor-pointer animate-pulse" onClick={() => setActiveTab('gym')}>
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-emerald-500/20">
                 G
               </div>
@@ -115,7 +107,7 @@ function AppLayout() {
             {/* Quick logout */}
             <button 
               onClick={logout}
-              className="p-1.5 rounded-lg bg-slate-950 border border-slate-855 hover:text-rose-400 text-slate-500 transition-colors"
+              className="p-1.5 rounded-lg bg-slate-950 border border-slate-850 hover:text-rose-400 text-slate-500 transition-colors"
               title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
@@ -131,7 +123,7 @@ function AppLayout() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative ${
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all relative ${
                     isActive 
                       ? 'text-emerald-400 bg-emerald-500/5 border border-emerald-500/10' 
                       : 'text-slate-450 hover:text-slate-200 hover:bg-slate-850/50 border border-transparent'
@@ -139,19 +131,16 @@ function AppLayout() {
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-500'}`} />
                   {item.label}
-                  {item.id === 'focus' && timerActive && (
-                    <span className="absolute right-4 w-2 h-2 rounded-full bg-purple-500 animate-ping" />
-                  )}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        {/* User Mini profile widget */}
+        {/* User profile widget */}
         {profile && (
           <div 
-            onClick={() => setActiveTab('settings')}
+            onClick={() => setActiveTab('profile')}
             className="flex items-center gap-3 bg-slate-950/40 hover:bg-slate-950/80 p-3 rounded-2xl border border-slate-850 cursor-pointer transition-all"
           >
             <img 
@@ -169,15 +158,15 @@ function AppLayout() {
       </aside>
 
       {/* 2. MOBILE TOP BANNER */}
-      <header className="md:hidden flex items-center justify-between px-5 py-4 bg-slate-900 border-b border-slate-855 sticky top-0 z-30">
-        <div className="flex items-center gap-2" onClick={() => setActiveTab('dashboard')}>
+      <header className="md:hidden flex items-center justify-between px-5 py-4 bg-slate-900 border-b border-slate-850 sticky top-0 z-30">
+        <div className="flex items-center gap-2" onClick={() => setActiveTab('gym')}>
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-slate-950 font-black">
             G
           </div>
           <span className="font-black text-md tracking-tight text-white">Gymeo</span>
         </div>
 
-        {/* Mini profile stats and logout */}
+        {/* Mini stats */}
         {profile && (
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/15 px-2 py-1 rounded-lg text-[10px] font-bold text-amber-400">
@@ -197,7 +186,7 @@ function AppLayout() {
         )}
       </header>
 
-      {/* 3. MAIN CONTENT FRAME */}
+      {/* 3. MAIN PORT PANEL */}
       <main className="flex-1 p-5 md:p-8 max-w-6xl mx-auto w-full pb-24 md:pb-8 overflow-y-auto">
         <AnimatePresence mode="wait">
           <motion.div
@@ -212,8 +201,8 @@ function AppLayout() {
         </AnimatePresence>
       </main>
 
-      {/* 4. MOBILE BOTTOM NAV BAR */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-md border-t border-slate-850 py-3.5 px-6 flex justify-between items-center z-30 shadow-2xl">
+      {/* 4. MOBILE BOTTOM NAV BAR - Material 3 Pill Indicator */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-850 py-3 px-6 flex justify-between items-center z-30 shadow-2xl">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -221,23 +210,28 @@ function AppLayout() {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className="flex flex-col items-center justify-center relative p-1.5"
+              className="flex flex-col items-center justify-center relative p-2"
             >
-              <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-emerald-400 scale-110' : 'text-slate-500 hover:text-slate-350'}`} />
-              {item.id === 'focus' && timerActive && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 animate-ping" />
+              {/* M3 Active pill highlight */}
+              {isActive && (
+                <motion.div 
+                  layoutId="m3-active-pill"
+                  className="absolute w-12 h-7 bg-emerald-500/15 rounded-full -z-10"
+                  transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                />
               )}
+              <Icon className={`w-5 h-5 transition-all ${isActive ? 'text-emerald-400 scale-105' : 'text-slate-550 hover:text-slate-350'}`} />
             </button>
           );
         })}
       </nav>
 
       {/* 5. FLOATING TIMER SUB-BAR FOR BACKGROUND FOCUSING */}
-      {timerActive && activeTab !== 'focus' && (
+      {timerActive && (
         <motion.div
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          onClick={() => setActiveTab('focus')}
+          onClick={() => setActiveTab('gym')}
           className="fixed bottom-20 md:bottom-6 right-6 bg-gradient-to-r from-purple-900 to-indigo-900 text-white px-4 py-2.5 rounded-2xl border border-purple-500/35 shadow-2xl flex items-center gap-3 cursor-pointer z-40 hover:scale-103 transition-transform"
         >
           <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />

@@ -13,10 +13,12 @@ import {
   FriendActivity, 
   LeaderboardUser,
   WeightEntry,
-  WaterLog
+  WaterLog,
+  Meal,
+  WorkoutSchedule
 } from '../types';
 
-type TabType = 'dashboard' | 'workouts' | 'habits' | 'focus' | 'social' | 'progress' | 'settings';
+type TabType = 'gym' | 'food' | 'social' | 'stats' | 'profile';
 
 interface AppContextType {
   profile: UserProfile;
@@ -28,6 +30,8 @@ interface AppContextType {
   activities: FriendActivity[];
   weightHistory: WeightEntry[];
   waterLogs: WaterLog[];
+  meals: Meal[];
+  workoutSchedule: WorkoutSchedule;
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   theme: 'light' | 'dark';
@@ -57,6 +61,12 @@ interface AppContextType {
   removeFriend: (id: string) => void;
   resetAllData: () => void;
   
+  // New actions for scheduling & meals
+  addMeal: (meal: Omit<Meal, 'id' | 'userId'>) => void;
+  deleteMeal: (id: string) => void;
+  saveWorkoutSchedule: (schedule: WorkoutSchedule) => void;
+  toggleUnits: () => void;
+
   // Focus Timer
   timerActive: boolean;
   timerDuration: number; // in mins
@@ -86,7 +96,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [activities, setActivities] = useState<FriendActivity[]>([]);
   const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
-  const [activeTab, setActiveTabState] = useState<TabType>('dashboard');
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [workoutSchedule, setWorkoutSchedule] = useState<WorkoutSchedule>({ days: ['Mon', 'Wed', 'Fri'], reminderTime: '07:30' });
+  const [activeTab, setActiveTabState] = useState<TabType>('gym');
   const [theme, setThemeState] = useState<'light' | 'dark'>('dark');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'xp'; id: number } | null>(null);
 
@@ -98,7 +110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Refresh all state from db service (local) or Supabase (production)
+  // Refresh all state
   const refreshState = async () => {
     if (isSupabaseConfigured() && user) {
       try {
@@ -151,10 +163,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .order('date', { ascending: true });
         if (watData) setWaterLogs(watData as WaterLog[]);
 
-        // Fetch Global Achievements (static/local or schema tables)
+        // Fetch Meals
+        const { data: melData } = await supabase!
+          .from('meals')
+          .select('*')
+          .eq('user_id', user.id);
+        if (melData) setMeals(melData as Meal[]);
+
         setAchievements(db.getAchievements());
         setFriends(db.getFriends());
         setActivities(db.getActivities());
+        setWorkoutSchedule(db.getWorkoutSchedule());
       } catch (err) {
         console.error('Supabase fetch error, fallback to local', err);
         fallbackLocalState();
@@ -174,6 +193,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setActivities(db.getActivities());
     setWeightHistory(db.getWeightHistory());
     setWaterLogs(db.getWaterLogs());
+    setMeals(db.getMeals());
+    setWorkoutSchedule(db.getWorkoutSchedule());
   };
 
   // On App startup load session
@@ -185,7 +206,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setUser({ id: session.user.id, email: session.user.email! });
         }
         
-        // Handle auth change triggers
         supabase!.auth.onAuthStateChange((_event, session) => {
           if (session) {
             setUser({ id: session.user.id, email: session.user.email! });
@@ -195,7 +215,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         });
       } else {
-        // Fallback to LocalStorage mock user session
         const storedUser = localStorage.getItem('gymeo_session_user');
         if (storedUser) {
           setUser(JSON.parse(storedUser));
@@ -205,13 +224,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     initSession();
 
-    // Load visual theme
     const savedTheme = localStorage.getItem('gymeo_theme') as 'light' | 'dark';
     if (savedTheme) {
       setThemeState(savedTheme);
       document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     } else {
-      document.documentElement.classList.add('dark'); // default dark
+      document.documentElement.classList.add('dark');
     }
   }, []);
 
@@ -234,7 +252,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return false;
     } else {
-      // Mock Sign In: logs in local user
       const localProfile = db.getProfile();
       const mockSession = { id: localProfile.id, email };
       localStorage.setItem('gymeo_session_user', JSON.stringify(mockSession));
@@ -264,7 +281,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       return false;
     } else {
-      // Mock Register: creates new local profile
       const newProfile = db.registerUser(username, name);
       const mockSession = { id: newProfile.id, email };
       localStorage.setItem('gymeo_session_user', JSON.stringify(mockSession));
@@ -285,7 +301,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const completeOnboarding = (onboardingData: Partial<UserProfile>) => {
-    // Saves onboarding questionnaire data and updates profile
     const updated = db.updateProfile(onboardingData);
     setProfile(updated);
     showToast('Onboarding setup completed!', 'success');
@@ -317,11 +332,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Actions
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (isSupabaseConfigured() && user) {
-      const { error } = await supabase!
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-      if (error) console.error(error);
+      await supabase!.from('profiles').update(updates).eq('id', user.id);
     }
     const updated = db.updateProfile(updates);
     setProfile(updated);
@@ -330,13 +341,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addWorkout = async (workout: Omit<Workout, 'id' | 'userId'>) => {
     if (isSupabaseConfigured() && user) {
-      const { error } = await supabase!
-        .from('workouts')
-        .insert({
-          ...workout,
-          user_id: user.id
-        });
-      if (error) console.error(error);
+      await supabase!.from('workouts').insert({ ...workout, user_id: user.id });
     }
     db.addWorkout(workout);
     refreshState();
@@ -345,15 +350,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const createHabit = async (name: string, icon: string, color: string) => {
     if (isSupabaseConfigured() && user) {
-      const { error } = await supabase!
-        .from('habits')
-        .insert({
-          name,
-          icon,
-          color,
-          user_id: user.id
-        });
-      if (error) console.error(error);
+      await supabase!.from('habits').insert({ name, icon, color, user_id: user.id });
     }
     db.createHabit(name, icon, color);
     refreshState();
@@ -362,7 +359,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteHabit = async (id: string) => {
     if (isSupabaseConfigured() && user) {
-      // Mock / direct remove
       await supabase!.from('habits').delete().eq('id', id);
     }
     db.deleteHabit(id);
@@ -383,7 +379,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logWater = (amount: number) => {
     const currentAmount = db.logWater(amount);
     refreshState();
-    showToast(`Logged ${amount}ml water!`, 'success');
+    showToast(`Logged ${amount}${profile?.units === 'imperial' ? 'oz' : 'ml'} water!`, 'success');
     
     const prof = db.getProfile();
     if (currentAmount >= prof.waterIntakeGoal && (currentAmount - amount) < prof.waterIntakeGoal) {
@@ -406,7 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addWeight = (weight: number) => {
     db.addWeightEntry(weight);
     refreshState();
-    showToast(`Weight updated to ${weight}kg`, 'success');
+    showToast(`Weight updated to ${weight}${profile?.units === 'imperial' ? 'lbs' : 'kg'}`, 'success');
   };
 
   const searchUsers = (query: string) => {
@@ -435,6 +431,66 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     db.resetToDefaults();
     refreshState();
     showToast('Application reset to default mock data', 'info');
+  };
+
+  // --- NEW DIET DIARY ACTIONS ---
+  const addMeal = async (meal: Omit<Meal, 'id' | 'userId'>) => {
+    if (isSupabaseConfigured() && user) {
+      try {
+        await supabase!.from('meals').insert({ ...meal, user_id: user.id });
+      } catch (e) {}
+    }
+    db.addMeal(meal);
+    refreshState();
+    showToast('Meal diary logged! +20 XP', 'xp');
+  };
+
+  const deleteMeal = async (id: string) => {
+    if (isSupabaseConfigured() && user) {
+      try {
+        await supabase!.from('meals').delete().eq('id', id);
+      } catch (e) {}
+    }
+    db.deleteMeal(id);
+    refreshState();
+    showToast('Meal deleted', 'info');
+  };
+
+  const saveWorkoutSchedule = (schedule: WorkoutSchedule) => {
+    db.saveWorkoutSchedule(schedule);
+    setWorkoutSchedule(schedule);
+    showToast('Workout schedule saved!', 'success');
+  };
+
+  const toggleUnits = () => {
+    if (!profile) return;
+    const currentUnits = profile.units || 'metric';
+    const nextUnits = currentUnits === 'metric' ? 'imperial' : 'metric';
+    
+    let newWeight = profile.weight;
+    let newHeight = profile.height;
+    let newWaterGoal = profile.waterIntakeGoal;
+    let newWaterIntake = profile.waterIntakeToday;
+    
+    if (nextUnits === 'imperial') {
+      newWeight = Math.round(profile.weight * 2.20462 * 10) / 10;
+      newHeight = Math.round(profile.height * 0.393701);
+      newWaterGoal = Math.round(profile.waterIntakeGoal * 0.033814);
+      newWaterIntake = Math.round(profile.waterIntakeToday * 0.033814);
+    } else {
+      newWeight = Math.round((profile.weight / 2.20462) * 10) / 10;
+      newHeight = Math.round(profile.height / 0.393701);
+      newWaterGoal = Math.round(profile.waterIntakeGoal / 0.033814);
+      newWaterIntake = Math.round(profile.waterIntakeToday / 0.033814);
+    }
+    
+    updateProfile({
+      units: nextUnits,
+      weight: newWeight,
+      height: newHeight,
+      waterIntakeGoal: newWaterGoal,
+      waterIntakeToday: newWaterIntake
+    });
   };
 
   // Focus Timer Logic
@@ -468,38 +524,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setTimerActive(false);
     setTimerPaused(false);
     if (timerRef.current) clearInterval(timerRef.current);
-    
     db.addFocusSession(timerDuration);
     refreshState();
     showToast(`Focus Session Completed! +30 XP`, 'xp');
     
-    // Play sound if possible
     try {
       if (typeof window !== 'undefined') {
         const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
-        
         oscillator.connect(gainNode);
         gainNode.connect(audioCtx.destination);
-        
         oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-        oscillator.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.3); // D6
-        
+        oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15);
+        oscillator.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.3);
         gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
-        
         oscillator.start();
         oscillator.stop(audioCtx.currentTime + 0.6);
       }
-    } catch (e) {
-      console.log('Audio playback failed or blocked by autoplay settings', e);
-    }
+    } catch (e) {}
   };
 
-  // Timer Tick
   useEffect(() => {
     if (timerActive && !timerPaused) {
       timerRef.current = setInterval(() => {
@@ -523,11 +570,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [timerActive, timerPaused, timerDuration]);
 
-  // Loading state checks user authentication load
-  const isLoaded = isSupabaseConfigured() 
-    ? true // handled on session check callbacks
-    : true; // local is immediate
-
   const isAuthenticated = !!user;
   const isOnboarded = !!(profile && profile.height > 0);
 
@@ -543,6 +585,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         activities,
         weightHistory,
         waterLogs,
+        meals,
+        workoutSchedule,
         activeTab,
         setActiveTab,
         theme,
@@ -569,6 +613,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         acceptFriendRequest,
         removeFriend,
         resetAllData,
+        
+        addMeal,
+        deleteMeal,
+        saveWorkoutSchedule,
+        toggleUnits,
         
         timerActive,
         timerDuration,

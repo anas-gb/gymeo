@@ -5,24 +5,25 @@ export interface UserProfile {
   avatarUrl: string;
   bio: string;
   age?: number;
-  height: number; // in cm
-  weight: number; // in kg
+  height: number; // in cm (metric) or inches (imperial)
+  weight: number; // in kg (metric) or lbs (imperial)
   fitnessGoal: 'lose_weight' | 'gain_muscle' | 'stay_fit' | 'build_endurance';
   xp: number;
   level: number;
   currentStreak: number;
   longestStreak: number;
   joinDate: string;
-  waterIntakeGoal: number; // in ml
-  waterIntakeToday: number; // in ml
+  waterIntakeGoal: number; // in ml or oz
+  waterIntakeToday: number; // in ml or oz
   walkGoalSteps: number;
   walkStepsToday: number;
+  units: 'metric' | 'imperial';
 }
 
 export interface Set {
   reps: number;
-  weight?: number; // in kg
-  distance?: number; // in km
+  weight?: number; // in kg or lbs
+  distance?: number; // in km or miles
   completed: boolean;
 }
 
@@ -67,7 +68,7 @@ export interface Achievement {
   title: string;
   description: string;
   icon: string;
-  category: 'workout' | 'streak' | 'focus' | 'walk' | 'friends' | 'profile' | 'level';
+  category: 'workout' | 'streak' | 'focus' | 'walk' | 'friends' | 'profile' | 'level' | 'food';
   xpReward: number;
   unlockedAt?: string; // YYYY-MM-DD
   progress: number;
@@ -93,9 +94,9 @@ export interface FriendActivity {
   username: string;
   displayName: string;
   avatarUrl: string;
-  activityType: 'workout' | 'focus' | 'habit' | 'achievement' | 'streak';
+  activityType: 'workout' | 'focus' | 'habit' | 'achievement' | 'streak' | 'food';
   activityDetail: string;
-  timestamp: string; // e.g., "2 hours ago" or full date
+  timestamp: string; // e.g. "2 hours ago"
   xpEarned?: number;
 }
 
@@ -113,10 +114,39 @@ export interface LeaderboardUser {
 
 export interface WeightEntry {
   date: string; // YYYY-MM-DD
-  weight: number; // kg
+  weight: number; // kg or lbs
 }
 
 export interface WaterLog {
   date: string; // YYYY-MM-DD
-  amount: number; // ml
+  amount: number; // ml or oz
+}
+
+// NEW FOR FOOD TAB
+export interface Meal {
+  id: string;
+  userId: string;
+  name: string;
+  calories: number;
+  protein: number; // grams
+  carbs: number; // grams
+  fat: number; // grams
+  type: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack';
+  date: string; // YYYY-MM-DD
+}
+
+// NEW FOR WORKOUT PLANNER
+export interface WorkoutSchedule {
+  days: ('Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun')[];
+  reminderTime: string; // HH:MM
+}
+
+// EXERCISE LIBRARY REFERENCE
+export interface LibraryExercise {
+  name: string;
+  category: 'Chest' | 'Back' | 'Legs' | 'Shoulders' | 'Arms' | 'Core' | 'Cardio';
+  description: string;
+  howToUse: string[];
+  gains: string[];
+  xpGained: number;
 }
