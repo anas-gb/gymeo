@@ -18,7 +18,7 @@ import {
 import { UserProfile } from '../../types';
 
 interface OnboardingViewProps {
-  initialProfile: UserProfile;
+  initialProfile: UserProfile | null;
   onComplete: (onboardingData: Partial<UserProfile>) => void;
 }
 
@@ -33,8 +33,8 @@ export default function OnboardingView({ initialProfile, onComplete }: Onboardin
   const [step, setStep] = useState(1);
   
   // State variables for form
-  const [displayName, setDisplayName] = useState(initialProfile.displayName || '');
-  const [username, setUsername] = useState(initialProfile.username || '');
+  const [displayName, setDisplayName] = useState(initialProfile?.displayName || '');
+  const [username, setUsername] = useState(initialProfile?.username || '');
   const [bio, setBio] = useState('');
   const [age, setAge] = useState('24');
   const [height, setHeight] = useState(175); // cm

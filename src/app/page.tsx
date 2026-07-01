@@ -67,6 +67,16 @@ function AppLayout() {
     return <AuthView onLogin={login} onRegister={register} />;
   }
 
+  // --- PROFILE LOADING GATE ---
+  if (isAuthenticated && !profile) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-emerald-400 font-semibold text-lg animate-pulse">Loading Profile...</p>
+      </div>
+    );
+  }
+
   // --- SECURITY GATE 2: Onboarded check ---
   if (!isOnboarded) {
     return <OnboardingView initialProfile={profile} onComplete={completeOnboarding} />;
