@@ -1,3 +1,4 @@
+<img width="1893" height="858" alt="260702_02h23m41s_screenshot" src="https://github.com/user-attachments/assets/2e574bca-02ad-4520-a69c-77b64dacf5b7" />
 # Gymeo 🎯
 
 Gymeo is a modern, gamified Progressive Web App (PWA) built to make self-improvement, daily habits tracking, and fitness routines as engaging as playing Duolingo. It uses streaks, experience points (XP), achievements, leaderboards, and interactive focus timers to help users stay consistent and build discipline.
