@@ -110,65 +110,117 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Refresh all state
   const refreshState = async () => {
     if (isSupabaseConfigured() && user) {
       try {
         // Fetch User Profile
-        const { data: profData, error: profErr } = await supabase!
+        let { data: profData, error: profErr } = await supabase!
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
           
-        if (!profErr && profData) {
+        if (profErr || !profData) {
+          // Auto create profile row if missing (e.g. trigger lag or Google Auth first login)
+          const newProf = {
+            id: user.id,
+            username: `user_${user.id.substring(0, 8)}`,
+            display_name: user.email.split('@')[0] || 'Gym Warrior',
+            avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256&h=256',
+            fitness_goal: 'stay_fit',
+            xp: 0,
+            level: 1,
+            units: 'metric'
+          };
+          
+          try {
+            const { data: insertedProf, error: insertErr } = await supabase!
+              .from('profiles')
+              .insert(newProf)
+              .select()
+              .single();
+              
+            if (!insertErr && insertedProf) {
+              profData = insertedProf;
+              profErr = null;
+            }
+          } catch (insertEx) {
+            console.error('Failed to auto-insert profile row', insertEx);
+          }
+        }
+
+        if (profData) {
           setProfile(profData as UserProfile);
         }
 
         // Fetch Workouts
-        const { data: wrkData } = await supabase!
-          .from('workouts')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('date', { ascending: false });
-        if (wrkData) setWorkouts(wrkData as Workout[]);
+        try {
+          const { data: wrkData } = await supabase!
+            .from('workouts')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('date', { ascending: false });
+          if (wrkData) setWorkouts(wrkData as Workout[]);
+        } catch (e) {
+          console.error('Failed to fetch workouts from Supabase', e);
+        }
 
         // Fetch Habits
-        const { data: habData } = await supabase!
-          .from('habits')
-          .select('*')
-          .eq('user_id', user.id);
-        if (habData) setHabits(habData as Habit[]);
+        try {
+          const { data: habData } = await supabase!
+            .from('habits')
+            .select('*')
+            .eq('user_id', user.id);
+          if (habData) setHabits(habData as Habit[]);
+        } catch (e) {
+          console.error('Failed to fetch habits from Supabase', e);
+        }
 
         // Fetch Focus Sessions
-        const { data: focData } = await supabase!
-          .from('focus_sessions')
-          .select('*')
-          .eq('user_id', user.id);
-        if (focData) setFocusSessions(focData as FocusSession[]);
+        try {
+          const { data: focData } = await supabase!
+            .from('focus_sessions')
+            .select('*')
+            .eq('user_id', user.id);
+          if (focData) setFocusSessions(focData as FocusSession[]);
+        } catch (e) {
+          console.error('Failed to fetch focus sessions from Supabase', e);
+        }
 
         // Fetch Weight Logs
-        const { data: wgtData } = await supabase!
-          .from('weight_history')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('date', { ascending: true });
-        if (wgtData) setWeightHistory(wgtData as WeightEntry[]);
+        try {
+          const { data: wgtData } = await supabase!
+            .from('weight_history')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('date', { ascending: true });
+          if (wgtData) setWeightHistory(wgtData as WeightEntry[]);
+        } catch (e) {
+          console.error('Failed to fetch weight history from Supabase', e);
+        }
 
         // Fetch Water Logs
-        const { data: watData } = await supabase!
-          .from('water_logs')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('date', { ascending: true });
-        if (watData) setWaterLogs(watData as WaterLog[]);
+        try {
+          const { data: watData } = await supabase!
+            .from('water_logs')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('date', { ascending: true });
+          if (watData) setWaterLogs(watData as WaterLog[]);
+        } catch (e) {
+          console.error('Failed to fetch water logs from Supabase', e);
+        }
 
         // Fetch Meals
-        const { data: melData } = await supabase!
-          .from('meals')
-          .select('*')
-          .eq('user_id', user.id);
-        if (melData) setMeals(melData as Meal[]);
+        try {
+          const { data: melData } = await supabase!
+            .from('meals')
+            .select('*')
+            .eq('user_id', user.id);
+          if (melData) setMeals(melData as Meal[]);
+        } catch (e) {
+          console.error('Failed to fetch meals from Supabase', e);
+        }
 
         setAchievements(db.getAchievements());
         setFriends(db.getFriends());
