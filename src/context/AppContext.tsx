@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { db } from '../services/db';
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient';
 import { 
   UserProfile, 
   Workout, 
@@ -31,6 +32,15 @@ interface AppContextType {
   setActiveTab: (tab: TabType) => void;
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
+  
+  // Auth state
+  user: { id: string; email: string } | null;
+  isAuthenticated: boolean;
+  isOnboarded: boolean;
+  login: (email: string, pass: string) => Promise<boolean>;
+  register: (email: string, pass: string, username: string, name: string) => Promise<boolean>;
+  logout: () => void;
+  completeOnboarding: (data: Partial<UserProfile>) => void;
   
   // Actions
   updateProfile: (updates: Partial<UserProfile>) => void;
@@ -66,6 +76,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -77,11 +88,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [waterLogs, setWaterLogs] = useState<WaterLog[]>([]);
   const [activeTab, setActiveTabState] = useState<TabType>('dashboard');
   const [theme, setThemeState] = useState<'light' | 'dark'>('dark');
-  
-  // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'xp'; id: number } | null>(null);
 
-  // Focus Timer state
+  // Focus Timer states
   const [timerActive, setTimerActive] = useState(false);
   const [timerDuration, setTimerDuration] = useState(25);
   const [timerTimeLeft, setTimerTimeLeft] = useState(25 * 60);
@@ -89,8 +98,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Refresh all state from db service
-  const refreshState = () => {
+  // Refresh all state from db service (local) or Supabase (production)
+  const refreshState = async () => {
+    if (isSupabaseConfigured() && user) {
+      try {
+        // Fetch User Profile
+        const { data: profData, error: profErr } = await supabase!
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (!profErr && profData) {
+          setProfile(profData as UserProfile);
+        }
+
+        // Fetch Workouts
+        const { data: wrkData } = await supabase!
+          .from('workouts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', { ascending: false });
+        if (wrkData) setWorkouts(wrkData as Workout[]);
+
+        // Fetch Habits
+        const { data: habData } = await supabase!
+          .from('habits')
+          .select('*')
+          .eq('user_id', user.id);
+        if (habData) setHabits(habData as Habit[]);
+
+        // Fetch Focus Sessions
+        const { data: focData } = await supabase!
+          .from('focus_sessions')
+          .select('*')
+          .eq('user_id', user.id);
+        if (focData) setFocusSessions(focData as FocusSession[]);
+
+        // Fetch Weight Logs
+        const { data: wgtData } = await supabase!
+          .from('weight_history')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', { ascending: true });
+        if (wgtData) setWeightHistory(wgtData as WeightEntry[]);
+
+        // Fetch Water Logs
+        const { data: watData } = await supabase!
+          .from('water_logs')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', { ascending: true });
+        if (watData) setWaterLogs(watData as WaterLog[]);
+
+        // Fetch Global Achievements (static/local or schema tables)
+        setAchievements(db.getAchievements());
+        setFriends(db.getFriends());
+        setActivities(db.getActivities());
+      } catch (err) {
+        console.error('Supabase fetch error, fallback to local', err);
+        fallbackLocalState();
+      }
+    } else {
+      fallbackLocalState();
+    }
+  };
+
+  const fallbackLocalState = () => {
     setProfile(db.getProfile());
     setWorkouts(db.getWorkouts());
     setHabits(db.getHabits());
@@ -99,13 +173,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setFriends(db.getFriends());
     setActivities(db.getActivities());
     setWeightHistory(db.getWeightHistory());
+    setWaterLogs(db.getWaterLogs());
   };
 
+  // On App startup load session
   useEffect(() => {
-    // Initial load
-    refreshState();
-    
-    // Load theme
+    const initSession = async () => {
+      if (isSupabaseConfigured()) {
+        const { data: { session } } = await supabase!.auth.getSession();
+        if (session) {
+          setUser({ id: session.user.id, email: session.user.email! });
+        }
+        
+        // Handle auth change triggers
+        supabase!.auth.onAuthStateChange((_event, session) => {
+          if (session) {
+            setUser({ id: session.user.id, email: session.user.email! });
+          } else {
+            setUser(null);
+            setProfile(null);
+          }
+        });
+      } else {
+        // Fallback to LocalStorage mock user session
+        const storedUser = localStorage.getItem('gymeo_session_user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      }
+    };
+
+    initSession();
+
+    // Load visual theme
     const savedTheme = localStorage.getItem('gymeo_theme') as 'light' | 'dark';
     if (savedTheme) {
       setThemeState(savedTheme);
@@ -114,6 +214,82 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.classList.add('dark'); // default dark
     }
   }, []);
+
+  // Sync profile data once user changes
+  useEffect(() => {
+    if (user) {
+      refreshState();
+    }
+  }, [user]);
+
+  // Auth Operations
+  const login = async (email: string, pass: string): Promise<boolean> => {
+    if (isSupabaseConfigured()) {
+      const { data, error } = await supabase!.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
+      if (data.user) {
+        setUser({ id: data.user.id, email: data.user.email! });
+        showToast('Signed in successfully!', 'success');
+        return true;
+      }
+      return false;
+    } else {
+      // Mock Sign In: logs in local user
+      const localProfile = db.getProfile();
+      const mockSession = { id: localProfile.id, email };
+      localStorage.setItem('gymeo_session_user', JSON.stringify(mockSession));
+      setUser(mockSession);
+      showToast('Signed in successfully! (Local Session)', 'success');
+      return true;
+    }
+  };
+
+  const register = async (email: string, pass: string, username: string, name: string): Promise<boolean> => {
+    if (isSupabaseConfigured()) {
+      const { data, error } = await supabase!.auth.signUp({
+        email,
+        password: pass,
+        options: {
+          data: {
+            username,
+            display_name: name
+          }
+        }
+      });
+      if (error) throw error;
+      if (data.user) {
+        setUser({ id: data.user.id, email: data.user.email! });
+        showToast('Account registered successfully!', 'success');
+        return true;
+      }
+      return false;
+    } else {
+      // Mock Register: creates new local profile
+      const newProfile = db.registerUser(username, name);
+      const mockSession = { id: newProfile.id, email };
+      localStorage.setItem('gymeo_session_user', JSON.stringify(mockSession));
+      setUser(mockSession);
+      showToast('Account created! (Local Session)', 'success');
+      return true;
+    }
+  };
+
+  const logout = async () => {
+    if (isSupabaseConfigured()) {
+      await supabase!.auth.signOut();
+    }
+    localStorage.removeItem('gymeo_session_user');
+    setUser(null);
+    setProfile(null);
+    showToast('Signed out successfully.', 'info');
+  };
+
+  const completeOnboarding = (onboardingData: Partial<UserProfile>) => {
+    // Saves onboarding questionnaire data and updates profile
+    const updated = db.updateProfile(onboardingData);
+    setProfile(updated);
+    showToast('Onboarding setup completed!', 'success');
+  };
 
   const setTheme = (newTheme: 'light' | 'dark') => {
     setThemeState(newTheme);
@@ -139,32 +315,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   // Actions
-  const updateProfile = (updates: Partial<UserProfile>) => {
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    if (isSupabaseConfigured() && user) {
+      const { error } = await supabase!
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      if (error) console.error(error);
+    }
     const updated = db.updateProfile(updates);
     setProfile(updated);
-    showToast('Profile updated successfully!', 'success');
+    showToast('Profile updated!', 'success');
   };
 
-  const addWorkout = (workout: Omit<Workout, 'id' | 'userId'>) => {
+  const addWorkout = async (workout: Omit<Workout, 'id' | 'userId'>) => {
+    if (isSupabaseConfigured() && user) {
+      const { error } = await supabase!
+        .from('workouts')
+        .insert({
+          ...workout,
+          user_id: user.id
+        });
+      if (error) console.error(error);
+    }
     db.addWorkout(workout);
     refreshState();
     showToast(`Workout logged! +50 XP`, 'xp');
   };
 
-  const createHabit = (name: string, icon: string, color: string) => {
+  const createHabit = async (name: string, icon: string, color: string) => {
+    if (isSupabaseConfigured() && user) {
+      const { error } = await supabase!
+        .from('habits')
+        .insert({
+          name,
+          icon,
+          color,
+          user_id: user.id
+        });
+      if (error) console.error(error);
+    }
     db.createHabit(name, icon, color);
     refreshState();
     showToast(`Habit "${name}" created!`, 'success');
   };
 
-  const deleteHabit = (id: string) => {
+  const deleteHabit = async (id: string) => {
+    if (isSupabaseConfigured() && user) {
+      // Mock / direct remove
+      await supabase!.from('habits').delete().eq('id', id);
+    }
     db.deleteHabit(id);
     refreshState();
     showToast('Habit deleted.', 'info');
   };
 
   const toggleHabit = (id: string, date: string) => {
-    const { habit, completed } = db.toggleHabit(id, date);
+    const { completed } = db.toggleHabit(id, date);
     refreshState();
     if (completed) {
       showToast(`Habit completed! +20 XP`, 'xp');
@@ -299,7 +506,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setTimerTimeLeft((prev) => {
           if (prev <= 1) {
             clearInterval(timerRef.current!);
-            // Run finish
             setTimeout(() => {
               finishTimer();
             }, 100);
@@ -317,19 +523,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [timerActive, timerPaused, timerDuration]);
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
-        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-emerald-400 font-semibold text-lg animate-pulse">Initializing Gymeo...</p>
-      </div>
-    );
-  }
+  // Loading state checks user authentication load
+  const isLoaded = isSupabaseConfigured() 
+    ? true // handled on session check callbacks
+    : true; // local is immediate
+
+  const isAuthenticated = !!user;
+  const isOnboarded = !!(profile && profile.height > 0);
 
   return (
     <AppContext.Provider
       value={{
-        profile,
+        profile: profile!,
         workouts,
         habits,
         focusSessions,
@@ -342,6 +547,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setActiveTab,
         theme,
         setTheme,
+        
+        user,
+        isAuthenticated,
+        isOnboarded,
+        login,
+        register,
+        logout,
+        completeOnboarding,
         
         updateProfile,
         addWorkout,

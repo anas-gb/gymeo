@@ -297,6 +297,61 @@ class GymeoDatabase {
     this.save();
   }
 
+  public registerUser(username: string, displayName: string): UserProfile {
+    this.state = {
+      profile: {
+        id: `user-${Date.now()}`,
+        username,
+        displayName,
+        avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256&h=256',
+        bio: '',
+        age: undefined,
+        height: 0, // triggers onboarding (needs to be > 0)
+        weight: 0, // triggers onboarding
+        fitnessGoal: 'stay_fit',
+        xp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        joinDate: new Date().toISOString().split('T')[0],
+        waterIntakeGoal: 2000,
+        waterIntakeToday: 0,
+        walkGoalSteps: 10000,
+        walkStepsToday: 0
+      },
+      workouts: [],
+      habits: [],
+      focusSessions: [],
+      achievements: [
+        { id: 'ach-1', title: 'First Workout', description: 'Log your first workout in Gymeo', icon: 'Dumbbell', category: 'workout', xpReward: 100, progress: 0, maxProgress: 1 },
+        { id: 'ach-2', title: 'Consistency King', description: 'Maintain a 7-day daily streak', icon: 'Flame', category: 'streak', xpReward: 200, progress: 0, maxProgress: 7 },
+        { id: 'ach-3', title: 'Deep Focus', description: 'Complete 10 Focus Sessions', icon: 'Timer', category: 'focus', xpReward: 150, progress: 0, maxProgress: 10 },
+        { id: 'ach-4', title: 'Long Road', description: 'Walk a total of 100k Steps', icon: 'Compass', category: 'walk', xpReward: 250, progress: 0, maxProgress: 100000 },
+        { id: 'ach-5', title: 'Social Butterfly', description: 'Add 5 friends', icon: 'Users', category: 'friends', xpReward: 150, progress: 0, maxProgress: 5 },
+        { id: 'ach-6', title: 'Profile Complete', description: 'Set up your bio, height, and weight', icon: 'UserCheck', category: 'profile', xpReward: 50, progress: 0, maxProgress: 1 },
+        { id: 'ach-7', title: 'Power User', description: 'Reach Level 10', icon: 'Zap', category: 'level', xpReward: 300, progress: 1, maxProgress: 10 }
+      ],
+      friends: [
+        { id: 'f-1', username: 'sarah_spin', displayName: 'Sarah Connor', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=256&h=256', bio: 'Spin instructor & smoothie enthusiast 🥤', level: 12, currentStreak: 8, status: 'online' },
+        { id: 'f-2', username: 'john_lift', displayName: 'John Doe', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=256&h=256', bio: 'Powerlifter. Heavy weights only.', level: 15, currentStreak: 3, status: 'offline' },
+        { id: 'f-3', username: 'emma_run', displayName: 'Emma Watson', avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=256&h=256', bio: 'Running is a mental sport, and we are all athletes.', level: 9, currentStreak: 5, status: 'online' }
+      ],
+      activities: [
+        { id: 'act-1', userId: 'f-1', username: 'sarah_spin', displayName: 'Sarah Connor', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=256&h=256', activityType: 'workout', activityDetail: 'completed a 45 min Cycling workout', timestamp: '2 hours ago', xpEarned: 50 },
+        { id: 'act-2', userId: 'f-2', username: 'john_lift', displayName: 'John Doe', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=256&h=256', activityType: 'achievement', activityDetail: 'unlocked the "Iron Giant" achievement (500 kg total lift)', timestamp: '5 hours ago', xpEarned: 250 }
+      ],
+      weightHistory: [],
+      waterLogs: []
+    };
+    this.save();
+    return this.state.profile;
+  }
+
+  public loginUser(email: string): UserProfile {
+    this.load();
+    return this.state!.profile;
+  }
+
   public getProfile(): UserProfile {
     this.load();
     return this.state!.profile;
@@ -507,6 +562,11 @@ class GymeoDatabase {
   public getWeightHistory(): WeightEntry[] {
     this.load();
     return this.state!.weightHistory;
+  }
+
+  public getWaterLogs(): WaterLog[] {
+    this.load();
+    return this.state!.waterLogs;
   }
 
   public addWeightEntry(weight: number): WeightEntry {
